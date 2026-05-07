@@ -33,11 +33,17 @@ class OrderLineItem {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Create Order Page
+//  Create / Edit Order Page
 // ─────────────────────────────────────────────────────────────
 class CreateOrderPage extends StatefulWidget {
   final VoidCallback onOrderCreated;
-  const CreateOrderPage({super.key, required this.onOrderCreated});
+  final Map<String, dynamic>? existingOrder; // non-null = edit mode
+
+  const CreateOrderPage({
+    super.key,
+    required this.onOrderCreated,
+    this.existingOrder,
+  });
 
   @override
   State<CreateOrderPage> createState() => _CreateOrderPageState();
@@ -53,7 +59,27 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
   @override
   void initState() {
     super.initState();
-    _addItem(); // Start with one empty item
+    if (widget.existingOrder != null) {
+      final o = widget.existingOrder!;
+      _customerNameCtrl.text = o['customer_name'] ?? '';
+      _locationCtrl.text     = o['customer_location'] ?? '';
+      final existingItems = (o['items'] as List?) ?? [];
+      if (existingItems.isNotEmpty) {
+        for (final item in existingItems) {
+          _items.add(OrderLineItem(
+            lineNumber: item['line_number'] ?? _items.length + 1,
+            itemName:   item['item_name']   ?? '',
+            qty:        (item['qty'] as num?)?.toDouble() ?? 1,
+            uom:        item['uom']         ?? 'Pcs',
+            remark:     item['remark']      ?? '',
+          ));
+        }
+      } else {
+        _addItem();
+      }
+    } else {
+      _addItem(); // Start with one empty item
+    }
   }
 
   void _addItem() {
@@ -79,23 +105,20 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
   /// Opens the Customer Directory viewer and auto-fills name + location
   /// when the user taps "Use" on a row.
   Future<void> _pickFromDirectory() async {
-    final selected = await Navigator.push<CustomerRecord>(
+    final selected = await Navigator.push<String>(
       context,
       MaterialPageRoute(
         builder: (_) => CustomerExcelViewerPage(
-          onCustomerSelected: (record) {
-            // Handled via Navigator.pop inside the viewer
-          },
+          onCustomerSelected: (name) {},
         ),
       ),
     );
 
     if (selected != null && mounted) {
       setState(() {
-        _customerNameCtrl.text = selected.name;
-        _locationCtrl.text = selected.location;
+        _customerNameCtrl.text = selected;
       });
-      showSnack(context, '${selected.name} selected ✓');
+      showSnack(context, '$selected selected ✓');
     }
   }
 
@@ -115,11 +138,12 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.receipt_long, color: Color(0xFF1A56DB)),
-            SizedBox(width: 8),
-            Text('Confirm Order'),
+            Icon(widget.existingOrder != null ? Icons.edit_outlined : Icons.receipt_long,
+                color: const Color(0xFF1A56DB)),
+            const SizedBox(width: 8),
+            Text(widget.existingOrder != null ? 'Confirm Changes' : 'Confirm Order'),
           ],
         ),
         content: Column(
@@ -152,7 +176,7 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Create Order'),
+            child: Text(widget.existingOrder != null ? 'Save Changes' : 'Create Order'),
           ),
         ],
       ),
@@ -161,19 +185,27 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
     if (confirmed != true) return;
 
     setState(() => _loading = true);
+    final isEdit = widget.existingOrder != null;
+    final payload = {
+      'customer_name': _customerNameCtrl.text.trim(),
+      'customer_location': _locationCtrl.text.trim(),
+      'items': _items.map((i) => i.toJson()).toList(),
+    };
     try {
-      await ApiService().createOrder({
-        'customer_name': _customerNameCtrl.text.trim(),
-        'customer_location': _locationCtrl.text.trim(),
-        'items': _items.map((i) => i.toJson()).toList(),
-      });
+      if (isEdit) {
+        await ApiService().editOrder(widget.existingOrder!['id'], payload);
+      } else {
+        await ApiService().createOrder(payload);
+      }
       if (mounted) {
-        showSnack(context, 'Order created successfully ✓');
+        showSnack(context, isEdit ? 'Order updated ✓' : 'Order created successfully ✓');
         widget.onOrderCreated();
         Navigator.pop(context);
       }
     } on ApiException catch (e) {
       if (mounted) showSnack(context, e.message, error: true);
+    } on NetworkException catch (e) {
+      if (mounted) showSnack(context, e.toString(), error: true);
     } catch (e) {
       if (mounted) showSnack(context, 'Error: $e', error: true);
     } finally {
@@ -206,8 +238,9 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
         backgroundColor: const Color(0xFF1A56DB),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('New Order',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(
+            widget.existingOrder != null ? 'Edit Order' : 'New Order',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
           if (_loading)
             const Padding(
@@ -327,8 +360,8 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
             // Submit Button (also at bottom for convenience)
             ElevatedButton.icon(
               onPressed: _loading ? null : _confirmAndSubmit,
-              icon: const Icon(Icons.receipt_long),
-              label: const Text('Review & Submit Order'),
+              icon: Icon(widget.existingOrder != null ? Icons.save_outlined : Icons.receipt_long),
+              label: Text(widget.existingOrder != null ? 'Review & Save Changes' : 'Review & Submit Order'),
             ),
             const SizedBox(height: 20),
           ],
