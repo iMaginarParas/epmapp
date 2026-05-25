@@ -1,95 +1,230 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'main.dart';
 import 'dashboard.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
+  late final AnimationController _contentCtrl;
+  late final Animation<double> _contentOpacity;
+  late final Animation<Offset> _contentSlide;
+
+  @override
+  void initState() {
+    super.initState();
+    _contentCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _contentOpacity = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _contentCtrl, curve: Curves.easeOut),
+    );
+    _contentSlide =
+        Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
+      CurvedAnimation(parent: _contentCtrl, curve: Curves.easeOutCubic),
+    );
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _contentCtrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _contentCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1B2D),
+      backgroundColor: const Color(0xFFF0F4FF),
       body: Stack(
         children: [
+          // ── Soft wave shapes in background (top-right & bottom-left) ──
           Positioned(
-            top: 0, left: 0, right: 0,
+            top: -60,
+            right: -60,
             child: Container(
-              height: size.height * 0.42,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1A3A6B), Color(0xFF0F1B2D)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFD6E4FF).withOpacity(0.6),
               ),
             ),
           ),
+          Positioned(
+            top: 30,
+            right: 60,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFBDD5FF).withOpacity(0.4),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -40,
+            left: -40,
+            child: Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFD6E4FF).withOpacity(0.5),
+              ),
+            ),
+          ),
+
           SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 88, height: 88,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 24,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.all(10),
-                        child: Image.asset('assets/invent.png', fit: BoxFit.contain),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'EPM ORDER DESK',
-                        style: TextStyle(
-                          color: Colors.white, fontSize: 22,
-                          fontWeight: FontWeight.w900, letterSpacing: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Internal Operations Platform',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
-                          fontSize: 12, letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(28),
-                        topRight: Radius.circular(28),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.18),
-                          blurRadius: 32,
-                          offset: const Offset(0, -4),
-                        ),
-                      ],
+            child: SlideTransition(
+              position: _contentSlide,
+              child: FadeTransition(
+                opacity: _contentOpacity,
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: size.height -
+                          MediaQuery.of(context).padding.top -
+                          MediaQuery.of(context).padding.bottom,
                     ),
-                    child: const _LoginForm(),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        children: [
+                          // ── Logo section ──────────────────────────
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+                            child: Column(
+                              children: [
+                                // Logo image
+                                Image.asset(
+                                  'assets/invent.png',
+                                  width: 120,
+                                  height: 120,
+                                  fit: BoxFit.contain,
+                                ),
+                                const SizedBox(height: 12),
+                                // App name
+                                const Text(
+                                  'EPM',
+                                  style: TextStyle(
+                                    color: Color(0xFF1A3A6B),
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 4,
+                                    height: 1,
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 30,
+                                      height: 1.5,
+                                      color: const Color(0xFF8094AE),
+                                    ),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: Text(
+                                        'O R D E R S',
+                                        style: TextStyle(
+                                          color: Color(0xFF5A7AA8),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 3,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 30,
+                                      height: 1.5,
+                                      color: const Color(0xFF8094AE),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Order. Track. Deliver.',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade500,
+                                    fontSize: 13,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // ── White login card ──────────────────────
+                          Expanded(
+                            child: Container(
+                              margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF1A56DB).withOpacity(0.08),
+                                    blurRadius: 32,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const _LoginForm(),
+                            ),
+                          ),
+
+                          // ── Footer ────────────────────────────────
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.verified_user_outlined,
+                                  color: Color(0xFF1A56DB),
+                                  size: 22,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Secure. Reliable. Built for Performance.',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade500,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '© 2024 EPM Orders. All rights reserved.',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade400,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -99,38 +234,39 @@ class LoginPage extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Shared field decoration
+//  Field decoration
 // ─────────────────────────────────────────────────────────────
-InputDecoration _field(String label, IconData icon) => InputDecoration(
-  labelText: label,
-  labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-  prefixIcon: Icon(icon, size: 19, color: const Color(0xFF8094AE)),
-  filled: true,
-  fillColor: const Color(0xFFF7F9FC),
-  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-  enabledBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(12),
-    borderSide: const BorderSide(color: Color(0xFFE4EAF4), width: 1.5),
-  ),
-  focusedBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(12),
-    borderSide: const BorderSide(color: Color(0xFF1A56DB), width: 1.8),
-  ),
-  errorBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(12),
-    borderSide: const BorderSide(color: Colors.red, width: 1.5),
-  ),
-  focusedErrorBorder: OutlineInputBorder(
-    borderRadius: BorderRadius.circular(12),
-    borderSide: const BorderSide(color: Colors.red, width: 1.8),
-  ),
-);
+InputDecoration _field(String hint, IconData icon) => InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF1A56DB)),
+      filled: true,
+      fillColor: const Color(0xFFF7F9FC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE4EAF4), width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF1A56DB), width: 1.8),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 1.8),
+      ),
+    );
 
 // ─────────────────────────────────────────────────────────────
 //  Login Form
 // ─────────────────────────────────────────────────────────────
 class _LoginForm extends StatefulWidget {
   const _LoginForm();
+
   @override
   State<_LoginForm> createState() => _LoginFormState();
 }
@@ -185,35 +321,51 @@ class _LoginFormState extends State<_LoginForm> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 20),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Welcome back!',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F1B2D))),
+            // ── Heading ──────────────────────────────────────
+            const Text(
+              'Welcome Back!',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F1B2D),
+              ),
+            ),
             const SizedBox(height: 4),
-            Text('Sign in to continue',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+            Text(
+              'Please sign in to continue',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+            ),
+
             const SizedBox(height: 28),
+
+            // ── Username field ────────────────────────────────
             TextFormField(
               controller: _userCtrl,
-              decoration: _field('Username', Icons.alternate_email),
+              decoration: _field('Username', Icons.person_outline),
               textInputAction: TextInputAction.next,
               autocorrect: false,
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Enter your username' : null,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
+
+            // ── Password field ────────────────────────────────
             TextFormField(
               controller: _passCtrl,
               decoration: _field('Password', Icons.lock_outline).copyWith(
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    size: 19, color: const Color(0xFF8094AE),
+                    _obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 20,
+                    color: Colors.grey.shade400,
                   ),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
@@ -224,36 +376,87 @@ class _LoginFormState extends State<_LoginForm> {
               validator: (v) =>
                   (v == null || v.isEmpty) ? 'Enter your password' : null,
             ),
+
             const SizedBox(height: 32),
+
+            // ── LOGIN button ──────────────────────────────────
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 54,
               child: ElevatedButton(
                 onPressed: _loading ? null : _login,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1A56DB),
-                  disabledBackgroundColor: const Color(0xFF1A56DB).withOpacity(0.6),
+                  backgroundColor: const Color(0xFF1A3A6B),
+                  disabledBackgroundColor:
+                      const Color(0xFF1A3A6B).withOpacity(0.6),
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                  ),
                 ),
                 child: _loading
-                    ? const SizedBox(width: 20, height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                    : const Text('Sign In'),
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.2, color: Colors.white))
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Text('LOGIN'),
+                          SizedBox(width: 10),
+                          Icon(Icons.arrow_forward, size: 18),
+                        ],
+                      ),
               ),
             ),
+
             const SizedBox(height: 24),
+
+            // ── Divider ───────────────────────────────────────
+            Row(
+              children: [
+                Expanded(child: Container(height: 1, color: Colors.grey.shade200)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Text(
+                    'OR',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade400,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+                Expanded(child: Container(height: 1, color: Colors.grey.shade200)),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
             Center(
               child: Text(
                 'Contact your administrator to get access.',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                textAlign: TextAlign.center,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _userCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
   }
 }

@@ -58,7 +58,7 @@ class _CustomerExcelViewerPageState extends State<CustomerExcelViewerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: const Color(0xFFF0F4FF),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A56DB),
         foregroundColor: Colors.white,

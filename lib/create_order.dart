@@ -372,6 +372,262 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  Inventory Picker Bottom Sheet
+// ─────────────────────────────────────────────────────────────
+Future<Map<String, dynamic>?> _showInventoryPicker(BuildContext context) async {
+  List<dynamic> _all = [];
+  List<dynamic> _filtered = [];
+  bool _loading = true;
+  final _searchCtrl = TextEditingController();
+
+  return showModalBottomSheet<Map<String, dynamic>>(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setModalState) {
+          // Load on first build
+          if (_loading && _all.isEmpty) {
+            ApiService().getInventory().then((data) {
+              setModalState(() {
+                _all = data;
+                _filtered = data;
+                _loading = false;
+              });
+            }).catchError((_) {
+              setModalState(() => _loading = false);
+            });
+          }
+
+          void onSearch(String q) {
+            setModalState(() {
+              _filtered = q.isEmpty
+                  ? _all
+                  : _all
+                      .where((i) => (i['product_name'] as String)
+                          .toLowerCase()
+                          .contains(q.toLowerCase()))
+                      .toList();
+            });
+          }
+
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.65,
+            maxChildSize: 0.92,
+            builder: (_, ctrl) => Column(
+              children: [
+                // Handle + header
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A56DB),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Column(
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36, height: 4,
+                          decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(2)),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Icon(Icons.warehouse_outlined, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          const Text('Pick from Inventory',
+                              style: TextStyle(color: Colors.white,
+                                  fontWeight: FontWeight.w700, fontSize: 16)),
+                          const Spacer(),
+                          if (!_loading)
+                            Text('${_filtered.length} items',
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _searchCtrl,
+                        onChanged: onSearch,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Search products…',
+                          hintStyle: const TextStyle(color: Colors.white60),
+                          prefixIcon:
+                              const Icon(Icons.search, color: Colors.white70, size: 20),
+                          suffixIcon: _searchCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.close,
+                                      color: Colors.white70, size: 18),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    onSearch('');
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.15),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          isDense: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // List
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _all.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.warehouse_outlined,
+                                      size: 48,
+                                      color: Colors.grey.shade300),
+                                  const SizedBox(height: 12),
+                                  Text('No inventory available',
+                                      style: TextStyle(
+                                          color: Colors.grey.shade500,
+                                          fontSize: 14)),
+                                ],
+                              ),
+                            )
+                          : _filtered.isEmpty
+                              ? Center(
+                                  child: Text(
+                                      'No results for "${_searchCtrl.text}"',
+                                      style: TextStyle(
+                                          color: Colors.grey.shade400)))
+                              : ListView.builder(
+                                  controller: ctrl,
+                                  padding: const EdgeInsets.fromLTRB(
+                                      16, 8, 16, 24),
+                                  itemCount: _filtered.length,
+                                  itemBuilder: (_, i) {
+                                    final inv = _filtered[i];
+                                    final name =
+                                        inv['product_name'] as String;
+                                    final qty =
+                                        (inv['quantity'] as num).toDouble();
+                                    final uom =
+                                        (inv['uom'] as String?) ?? 'Pcs';
+                                    final qtyColor = qty <= 0
+                                        ? Colors.red
+                                        : qty < 10
+                                            ? Colors.orange
+                                            : const Color(0xFF057A55);
+
+                                    return Container(
+                                      margin:
+                                          const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                              color: Colors.black
+                                                  .withOpacity(0.04),
+                                              blurRadius: 8)
+                                        ],
+                                      ),
+                                      child: ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 4),
+                                        leading: CircleAvatar(
+                                          backgroundColor: const Color(
+                                                  0xFF1A56DB)
+                                              .withOpacity(0.1),
+                                          child: Text(
+                                            name[0].toUpperCase(),
+                                            style: const TextStyle(
+                                                color: Color(0xFF1A56DB),
+                                                fontWeight: FontWeight.w800),
+                                          ),
+                                        ),
+                                        title: Text(name,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13)),
+                                        subtitle: Row(
+                                          children: [
+                                            Container(
+                                              margin: const EdgeInsets.only(
+                                                  top: 4),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: qtyColor
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'Stock: ${qty % 1 == 0 ? qty.toInt() : qty.toStringAsFixed(2)} $uom',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: qtyColor,
+                                                    fontWeight:
+                                                        FontWeight.w600),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        trailing: ElevatedButton(
+                                          onPressed: () => Navigator.pop(
+                                              ctx, {
+                                            'product_name': name,
+                                            'uom': uom,
+                                          }),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                const Color(0xFF1A56DB),
+                                            foregroundColor: Colors.white,
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 6),
+                                            minimumSize: Size.zero,
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8)),
+                                            textStyle: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700),
+                                          ),
+                                          child: const Text('Select'),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 //  Individual Item Card
 // ─────────────────────────────────────────────────────────────
 class _ItemCard extends StatefulWidget {
@@ -404,6 +660,20 @@ class _ItemCardState extends State<_ItemCard> {
     _qtyCtrl.dispose();
     _remarkCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFromInventory() async {
+    final picked = await _showInventoryPicker(context);
+    if (picked != null && mounted) {
+      final name = picked['product_name'] as String;
+      final uom  = picked['uom'] as String;
+      setState(() {
+        widget.item.itemName = name;
+        widget.item.uom = kUOMOptions.contains(uom) ? uom : 'Pcs';
+        _nameCtrl.text = name;
+      });
+      widget.onChanged();
+    }
   }
 
   @override
@@ -440,6 +710,30 @@ class _ItemCardState extends State<_ItemCard> {
                 const Text('Line Item',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF1A56DB))),
                 const Spacer(),
+                // ── Pick from Inventory button ────────────────
+                GestureDetector(
+                  onTap: _pickFromInventory,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A56DB).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.warehouse_outlined, size: 13, color: Color(0xFF1A56DB)),
+                        SizedBox(width: 4),
+                        Text('Inventory',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF1A56DB),
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: widget.onRemove,
                   child: Container(

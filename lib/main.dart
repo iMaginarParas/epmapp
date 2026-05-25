@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -809,14 +810,48 @@ class ApiService {
     _handle(res); return [];
   }
 
-  Future<Map<String, dynamic>> adminImportCustomers(List<String> names) async {
-    final res = await _safePost(Uri.parse('$kBaseUrl/admin/customers'), body: jsonEncode(names));
+  // ── Admin: Customers ─────────────────────────────────────
+  Future<Map<String, dynamic>> adminBulkImportCustomers(List<String> names) async {
+    final res = await _safePost(Uri.parse('$kBaseUrl/admin/customers/bulk'), body: jsonEncode(names));
     return _handle(res);
   }
 
-  Future<Map<String, dynamic>> adminImportInventory(List<Map<String, dynamic>> items) async {
-    final res = await _safePost(Uri.parse('$kBaseUrl/admin/inventory'), body: jsonEncode(items));
+  Future<Map<String, dynamic>> adminAddCustomer(String name) async {
+    final res = await _safePost(Uri.parse('$kBaseUrl/admin/customers/add'), body: jsonEncode({'name': name}));
     return _handle(res);
+  }
+
+  Future<List<dynamic>> adminListCustomers() async {
+    final res = await _safeGet(Uri.parse('$kBaseUrl/admin/customers'));
+    if (res.statusCode == 200) return jsonDecode(res.body) as List;
+    _handle(res); return [];
+  }
+
+  Future<void> adminDeleteCustomer(String customerId) async {
+    final res = await _safeDelete(Uri.parse('$kBaseUrl/admin/customers/$customerId'));
+    if (res.statusCode != 204) _handle(res);
+  }
+
+  // ── Admin: Inventory ──────────────────────────────────────
+  Future<Map<String, dynamic>> adminBulkImportInventory(List<Map<String, dynamic>> items) async {
+    final res = await _safePost(Uri.parse('$kBaseUrl/admin/inventory/bulk'), body: jsonEncode(items));
+    return _handle(res);
+  }
+
+  Future<Map<String, dynamic>> adminAddInventoryItem(Map<String, dynamic> body) async {
+    final res = await _safePost(Uri.parse('$kBaseUrl/admin/inventory/add'), body: jsonEncode(body));
+    return _handle(res);
+  }
+
+  Future<List<dynamic>> adminListInventory() async {
+    final res = await _safeGet(Uri.parse('$kBaseUrl/admin/inventory'));
+    if (res.statusCode == 200) return jsonDecode(res.body) as List;
+    _handle(res); return [];
+  }
+
+  Future<void> adminDeleteInventoryItem(String itemId) async {
+    final res = await _safeDelete(Uri.parse('$kBaseUrl/admin/inventory/$itemId'));
+    if (res.statusCode != 204) _handle(res);
   }
 
   Future<List<dynamic>> getInventory() async {
@@ -844,34 +879,6 @@ class ApiService {
 
   Future<void> adminDeleteUser(String userId) async {
     final res = await _safeDelete(Uri.parse('$kBaseUrl/admin/users/$userId'));
-    if (res.statusCode != 204) _handle(res);
-  }
-
-  // ── Admin: Stock Items ────────────────────────────────────
-  Future<List<dynamic>> adminListStockItems() async {
-    final res = await _safeGet(Uri.parse('$kBaseUrl/admin/stock-items'));
-    if (res.statusCode == 200) return jsonDecode(res.body) as List;
-    _handle(res); return [];
-  }
-
-  Future<List<dynamic>> listStockItems() async {
-    final res = await _safeGet(Uri.parse('$kBaseUrl/stock-items'));
-    if (res.statusCode == 200) return jsonDecode(res.body) as List;
-    _handle(res); return [];
-  }
-
-  Future<Map<String, dynamic>> adminCreateStockItem(Map<String, dynamic> body) async {
-    final res = await _safePost(Uri.parse('$kBaseUrl/admin/stock-items'), body: jsonEncode(body));
-    return _handle(res);
-  }
-
-  Future<Map<String, dynamic>> adminUpdateStockItem(String itemId, Map<String, dynamic> body) async {
-    final res = await _safePatch(Uri.parse('$kBaseUrl/admin/stock-items/$itemId'), body: jsonEncode(body));
-    return _handle(res);
-  }
-
-  Future<void> adminDeleteStockItem(String itemId) async {
-    final res = await _safeDelete(Uri.parse('$kBaseUrl/admin/stock-items/$itemId'));
     if (res.statusCode != 204) _handle(res);
   }
 
