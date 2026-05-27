@@ -2,8 +2,10 @@ name: epm_order_desk
 description: EPM ORDER DESK — Internal Sales Management App
 publish_to: none
 version: 1.0.0+1
+
 environment:
   sdk: '>=3.0.0 <4.0.0'
+
 dependencies:
   flutter:
     sdk: flutter
@@ -13,11 +15,17 @@ dependencies:
   file_picker: ^8.0.0
   excel: ^4.0.0
   image_picker: ^1.1.2
+  # ── Push Notifications ──────────────────────────
+  firebase_core: ^3.0.0
+  firebase_messaging: ^15.0.0
+  flutter_local_notifications: ^17.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.14.1
+
 flutter_launcher_icons:
   android: true
   ios: true
@@ -25,6 +33,7 @@ flutter_launcher_icons:
   min_sdk_android: 21
   adaptive_icon_background: "#ffffff"
   adaptive_icon_foreground: "assets/invent.png"
+
 flutter:
   uses-material-design: true
   assets:

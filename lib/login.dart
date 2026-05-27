@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'main.dart';
 import 'dashboard.dart';
 
@@ -49,7 +50,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       backgroundColor: const Color(0xFFF0F4FF),
       body: Stack(
         children: [
-          // ── Soft wave shapes in background (top-right & bottom-left) ──
           Positioned(
             top: -60,
             right: -60,
@@ -102,12 +102,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     child: IntrinsicHeight(
                       child: Column(
                         children: [
-                          // ── Logo section ──────────────────────────
                           Padding(
                             padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
                             child: Column(
                               children: [
-                                // Logo image
                                 Image.asset(
                                   'assets/invent.png',
                                   width: 120,
@@ -115,7 +113,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   fit: BoxFit.contain,
                                 ),
                                 const SizedBox(height: 12),
-                                // App name
                                 const Text(
                                   'EPM',
                                   style: TextStyle(
@@ -129,11 +126,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Container(
-                                      width: 30,
-                                      height: 1.5,
-                                      color: const Color(0xFF8094AE),
-                                    ),
+                                    Container(width: 30, height: 1.5, color: const Color(0xFF8094AE)),
                                     const Padding(
                                       padding: EdgeInsets.symmetric(horizontal: 8),
                                       child: Text(
@@ -146,11 +139,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                         ),
                                       ),
                                     ),
-                                    Container(
-                                      width: 30,
-                                      height: 1.5,
-                                      color: const Color(0xFF8094AE),
-                                    ),
+                                    Container(width: 30, height: 1.5, color: const Color(0xFF8094AE)),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
@@ -166,7 +155,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
 
-                          // ── White login card ──────────────────────
                           Expanded(
                             child: Container(
                               margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -190,31 +178,20 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
 
-                          // ── Footer ────────────────────────────────
                           Padding(
                             padding: const EdgeInsets.only(bottom: 20),
                             child: Column(
                               children: [
-                                const Icon(
-                                  Icons.verified_user_outlined,
-                                  color: Color(0xFF1A56DB),
-                                  size: 22,
-                                ),
+                                const Icon(Icons.verified_user_outlined, color: Color(0xFF1A56DB), size: 22),
                                 const SizedBox(height: 6),
                                 Text(
                                   'Secure. Reliable. Built for Performance.',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 11,
-                                  ),
+                                  style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   '© 2024 EPM Orders. All rights reserved.',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade400,
-                                    fontSize: 10,
-                                  ),
+                                  style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
                                 ),
                               ],
                             ),
@@ -233,19 +210,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Field decoration
-// ─────────────────────────────────────────────────────────────
-InputDecoration _field(String hint, IconData icon) => InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF1A56DB)),
+InputDecoration _field(String label, IconData icon) => InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 20, color: Colors.grey.shade400),
+      labelStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
       filled: true,
-      fillColor: const Color(0xFFF7F9FC),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      fillColor: Colors.grey.shade50,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey.shade200),
+      ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE4EAF4), width: 1.5),
+        borderSide: BorderSide(color: Colors.grey.shade200),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -303,6 +280,13 @@ class _LoginFormState extends State<_LoginForm> {
     await prefs.setString('full_name', d['full_name'] as String);
     await prefs.setString('username', d['username'] as String);
     ApiService().setToken(token);
+
+    // ── Register FCM token with backend ──────────────────────
+    await _registerFcmToken();
+
+    // ── Listen for foreground notifications ──────────────────
+    _setupForegroundNotifications();
+
     if (mounted) {
       Navigator.pushReplacement(
         context,
@@ -318,6 +302,43 @@ class _LoginFormState extends State<_LoginForm> {
     }
   }
 
+  Future<void> _registerFcmToken() async {
+    try {
+      // Request permission (required on iOS; harmless on Android)
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          await ApiService().registerFcmToken(fcmToken);
+          debugPrint('[FCM] Device token: $fcmToken');
+        }
+      } else {
+        debugPrint('[FCM] Permission denied — no push notifications');
+      }
+
+      // Save the token when it refreshes (e.g. app reinstall)
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+        ApiService().registerFcmToken(newToken);
+      });
+    } catch (e) {
+      debugPrint('[FCM] Error registering token: $e');
+    }
+  }
+
+  void _setupForegroundNotifications() {
+    // Show local notification when app is open (foreground)
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('[FCM Foreground] ${message.notification?.title}');
+      showLocalNotification(message);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -327,14 +348,9 @@ class _LoginFormState extends State<_LoginForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Heading ──────────────────────────────────────
             const Text(
               'Welcome Back!',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F1B2D),
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF0F1B2D)),
             ),
             const SizedBox(height: 4),
             Text(
@@ -344,7 +360,6 @@ class _LoginFormState extends State<_LoginForm> {
 
             const SizedBox(height: 28),
 
-            // ── Username field ────────────────────────────────
             TextFormField(
               controller: _userCtrl,
               decoration: _field('Username', Icons.person_outline),
@@ -355,15 +370,12 @@ class _LoginFormState extends State<_LoginForm> {
             ),
             const SizedBox(height: 16),
 
-            // ── Password field ────────────────────────────────
             TextFormField(
               controller: _passCtrl,
               decoration: _field('Password', Icons.lock_outline).copyWith(
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscure
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
+                    _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                     size: 20,
                     color: Colors.grey.shade400,
                   ),
@@ -379,7 +391,6 @@ class _LoginFormState extends State<_LoginForm> {
 
             const SizedBox(height: 32),
 
-            // ── LOGIN button ──────────────────────────────────
             SizedBox(
               width: double.infinity,
               height: 54,
@@ -387,24 +398,17 @@ class _LoginFormState extends State<_LoginForm> {
                 onPressed: _loading ? null : _login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1A3A6B),
-                  disabledBackgroundColor:
-                      const Color(0xFF1A3A6B).withOpacity(0.6),
+                  disabledBackgroundColor: const Color(0xFF1A3A6B).withOpacity(0.6),
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5,
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 1.5),
                 ),
                 child: _loading
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: Colors.white))
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
@@ -418,7 +422,6 @@ class _LoginFormState extends State<_LoginForm> {
 
             const SizedBox(height: 24),
 
-            // ── Divider ───────────────────────────────────────
             Row(
               children: [
                 Expanded(child: Container(height: 1, color: Colors.grey.shade200)),
@@ -426,12 +429,7 @@ class _LoginFormState extends State<_LoginForm> {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Text(
                     'OR',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade400,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.5,
-                    ),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.w600, letterSpacing: 1.5),
                   ),
                 ),
                 Expanded(child: Container(height: 1, color: Colors.grey.shade200)),

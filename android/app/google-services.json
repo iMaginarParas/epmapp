@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "522446699098",
+    "project_id": "epm-backend",
+    "storage_bucket": "epm-backend.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:522446699098:android:0b89603636f9126f0b7663",
+        "android_client_info": {
+          "package_name": "com.example.epmapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCn8bhGLUW_Mtq2oMr9MbknpD9fjWONG3A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

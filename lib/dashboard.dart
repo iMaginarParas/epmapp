@@ -1880,6 +1880,23 @@ class _DriverDashboardState extends State<DriverDashboard>
     }
   }
 
+  void _showLoadingDialog(String orderId, String ref) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true,
+      builder: (_) => _LoadingSheet(
+        orderId: orderId,
+        orderRef: ref,
+        onDone: () {
+          _load();
+          if (_tabs.index == 1) _loadHistory(silent: true);
+        },
+      ),
+    );
+  }
+
   void _showDeliveryDialog(String orderId, String ref) {
     showModalBottomSheet(
       context: context,
@@ -1952,8 +1969,8 @@ class _DriverDashboardState extends State<DriverDashboard>
                   order,
                   actions: [
                     ElevatedButton.icon(
-                      icon: const Icon(Icons.local_shipping, size: 18),
-                      label: const Text('Update Delivery',
+                      icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                      label: const Text('Loading',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFE3A008),
@@ -1963,7 +1980,7 @@ class _DriverDashboardState extends State<DriverDashboard>
                             borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      onPressed: () => _showDeliveryDialog(
+                      onPressed: () => _showLoadingDialog(
                           order['id']?.toString() ?? '',
                           order['order_reference']?.toString() ?? ''),
                     ),
@@ -2199,6 +2216,176 @@ class _DeliverySheetState extends State<_DeliverySheet> {
         ),
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  LOADING SHEET — Driver claims order + enters DN & Invoice #
+// ─────────────────────────────────────────────────────────────
+class _LoadingSheet extends StatefulWidget {
+  final String orderId;
+  final String orderRef;
+  final VoidCallback onDone;
+
+  const _LoadingSheet({required this.orderId, required this.orderRef, required this.onDone});
+
+  @override
+  State<_LoadingSheet> createState() => _LoadingSheetState();
+}
+
+class _LoadingSheetState extends State<_LoadingSheet> {
+  final _dnCtrl = TextEditingController();
+  final _invCtrl = TextEditingController();
+  bool _loading = false;
+
+  Future<void> _submit() async {
+    final dn = _dnCtrl.text.trim();
+    final inv = _invCtrl.text.trim();
+    if (dn.isEmpty) {
+      showSnack(context, 'Please enter the Delivery Note Number', error: true);
+      return;
+    }
+    if (inv.isEmpty) {
+      showSnack(context, 'Please enter the Invoice Number', error: true);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await ApiService().markLoading(widget.orderId, dn, inv);
+      if (mounted) {
+        Navigator.pop(context);
+        showSnack(context, 'Order assigned to you — Loading confirmed ✓');
+        widget.onDone();
+      }
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, e.message, error: true);
+    } on NetworkException catch (e) {
+      if (mounted) showSnack(context, e.toString(), error: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 20, right: 20, top: 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3A008).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.inventory_2_outlined,
+                    color: Color(0xFFE3A008), size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Loading',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text(widget.orderRef,
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3A008).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE3A008).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 14, color: Color(0xFFE3A008)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'This order will be assigned to you once submitted.',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _dnCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Delivery Note Number *',
+                prefixIcon: Icon(Icons.description_outlined),
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _invCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Invoice Number *',
+                prefixIcon: Icon(Icons.receipt_long_outlined),
+                border: OutlineInputBorder(),
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: _loading
+                    ? const SizedBox(
+                        height: 16, width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_circle_outline, size: 18),
+                label: Text(_loading ? 'Saving…' : 'Confirm Loading',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE3A008),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                onPressed: _loading ? null : _submit,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _dnCtrl.dispose();
+    _invCtrl.dispose();
+    super.dispose();
   }
 }
 
