@@ -630,13 +630,16 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> markLoading(
-      String orderId, String deliveryNoteNumber, String invoiceNumber) async {
+      String orderId, String deliveryNoteNumber, String? invoiceNumber) async {
+    final payload = <String, dynamic>{
+      'delivery_note_number': deliveryNoteNumber,
+    };
+    if (invoiceNumber != null && invoiceNumber.isNotEmpty) {
+      payload['invoice_number'] = invoiceNumber;
+    }
     final res = await _safePatch(
       Uri.parse('$kBaseUrl/orders/$orderId/loading'),
-      body: jsonEncode({
-        'delivery_note_number': deliveryNoteNumber,
-        'invoice_number': invoiceNumber,
-      }),
+      body: jsonEncode(payload),
     );
     return _handle(res);
   }
@@ -875,6 +878,8 @@ Color statusColor(String status) {
       return Colors.orange;
     case 'Invoiced':
       return const Color(0xFF1A56DB);
+    case 'Loading':
+      return const Color(0xFFE3A008);
     case 'Delivered':
       return Colors.green;
     case 'Cancelled':

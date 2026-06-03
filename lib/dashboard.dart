@@ -1830,8 +1830,10 @@ class _DriverDashboardState extends State<DriverDashboard>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
 
-  // Queue tab
-  List<dynamic> _orders = [];
+  // Invoiced pool tab (all unassigned invoiced orders)
+  List<dynamic> _invoicedOrders = [];
+  // To Deliver tab (assigned to me, status=Loading)
+  List<dynamic> _myOrders = [];
   bool _loading = true;
 
   // History tab
@@ -1842,9 +1844,9 @@ class _DriverDashboardState extends State<DriverDashboard>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _tabs.addListener(() {
-      if (_tabs.index == 1 && _history.isEmpty && !_historyLoading) {
+      if (_tabs.index == 2 && _history.isEmpty && !_historyLoading) {
         _loadHistory();
       }
     });
@@ -1861,7 +1863,11 @@ class _DriverDashboardState extends State<DriverDashboard>
     setState(() => _loading = true);
     try {
       final data = await ApiService().getDriverDashboard();
-      setState(() { _orders = (data['invoiced_orders'] as List?) ?? []; _loading = false; });
+      setState(() {
+        _invoicedOrders = (data['invoiced_orders'] as List?) ?? [];
+        _myOrders       = (data['my_loading_orders'] as List?) ?? [];
+        _loading        = false;
+      });
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) showSnack(context, e.toString(), error: true);
@@ -1891,7 +1897,7 @@ class _DriverDashboardState extends State<DriverDashboard>
         orderRef: ref,
         onDone: () {
           _load();
-          if (_tabs.index == 1) _loadHistory(silent: true);
+          if (_tabs.index == 2) _loadHistory(silent: true);
         },
       ),
     );
@@ -1908,7 +1914,7 @@ class _DriverDashboardState extends State<DriverDashboard>
         orderRef: ref,
         onDone: () {
           _load();
-          if (_tabs.index == 1) _loadHistory(silent: true);
+          if (_tabs.index == 2) _loadHistory(silent: true);
         },
       ),
     );
@@ -1925,10 +1931,51 @@ class _DriverDashboardState extends State<DriverDashboard>
             labelColor: const Color(0xFFE3A008),
             unselectedLabelColor: Colors.grey,
             indicatorColor: const Color(0xFFE3A008),
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            tabs: const [
-              Tab(icon: Icon(Icons.local_shipping_outlined, size: 18), text: 'To Deliver'),
-              Tab(icon: Icon(Icons.history_outlined, size: 18), text: 'History'),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            tabs: [
+              Tab(
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.receipt_long_outlined, size: 18),
+                    if (_invoicedOrders.isNotEmpty)
+                      Positioned(
+                        top: -4, right: -6,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF1A56DB), shape: BoxShape.circle),
+                          child: Text('${_invoicedOrders.length}',
+                              style: const TextStyle(color: Colors.white, fontSize: 9,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                  ],
+                ),
+                text: 'Invoiced',
+              ),
+              Tab(
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.local_shipping_outlined, size: 18),
+                    if (_myOrders.isNotEmpty)
+                      Positioned(
+                        top: -4, right: -6,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFE3A008), shape: BoxShape.circle),
+                          child: Text('${_myOrders.length}',
+                              style: const TextStyle(color: Colors.white, fontSize: 9,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                  ],
+                ),
+                text: 'To Deliver',
+              ),
+              const Tab(icon: Icon(Icons.history_outlined, size: 18), text: 'History'),
             ],
           ),
         ),
@@ -1936,7 +1983,8 @@ class _DriverDashboardState extends State<DriverDashboard>
           child: TabBarView(
             controller: _tabs,
             children: [
-              _buildQueue(),
+              _buildInvoicedPool(),
+              _buildMyQueue(),
               _buildHistory(),
             ],
           ),
@@ -1945,23 +1993,24 @@ class _DriverDashboardState extends State<DriverDashboard>
     );
   }
 
-  Widget _buildQueue() {
+  // ── Tab 1: Invoiced pool — all unassigned invoiced orders ─────────────────
+  Widget _buildInvoicedPool() {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Row(children: [
-            _StatCard(label: 'To Deliver', value: '${_orders.length}',
-                color: const Color(0xFFE3A008), icon: Icons.local_shipping_outlined),
+            _StatCard(label: 'Available', value: '${_invoicedOrders.length}',
+                color: const Color(0xFF1A56DB), icon: Icons.receipt_long_outlined),
           ]),
-          _sectionTitle('Ready to Deliver (${_orders.length})'),
+          _sectionTitle('Invoiced Orders — Tap Loading to claim (${_invoicedOrders.length})'),
           if (_loading)
             const Center(child: CircularProgressIndicator())
-          else if (_orders.isEmpty)
-            _emptyState('No deliveries', 'Invoiced orders appear here')
+          else if (_invoicedOrders.isEmpty)
+            _emptyState('No invoiced orders', 'Orders ready for pickup appear here')
           else
-            ..._orders.map((o) {
+            ..._invoicedOrders.map((o) {
               try {
                 final order = o as Map<String, dynamic>;
                 return _orderCard(
@@ -1995,6 +2044,58 @@ class _DriverDashboardState extends State<DriverDashboard>
     );
   }
 
+  // ── Tab 2: My queue — orders I claimed (status=Loading) ───────────────────
+  Widget _buildMyQueue() {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(children: [
+            _StatCard(label: 'To Deliver', value: '${_myOrders.length}',
+                color: const Color(0xFFE3A008), icon: Icons.local_shipping_outlined),
+          ]),
+          _sectionTitle('Assigned to Me — Ready to Deliver (${_myOrders.length})'),
+          if (_loading)
+            const Center(child: CircularProgressIndicator())
+          else if (_myOrders.isEmpty)
+            _emptyState('Nothing assigned yet',
+                'Claim an order from the Invoiced tab to see it here')
+          else
+            ..._myOrders.map((o) {
+              try {
+                final order = o as Map<String, dynamic>;
+                return _orderCard(
+                  context,
+                  order,
+                  actions: [
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.local_shipping, size: 18),
+                      label: const Text('Deliver',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF057A55),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      onPressed: () => _showDeliveryDialog(
+                          order['id']?.toString() ?? '',
+                          order['order_reference']?.toString() ?? ''),
+                    ),
+                  ],
+                );
+              } catch (_) {
+                return const SizedBox.shrink();
+              }
+            }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHistory() {
     return Column(
       children: [
@@ -2004,7 +2105,7 @@ class _DriverDashboardState extends State<DriverDashboard>
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: ['All', 'Invoiced', 'Delivered', 'Cancelled', 'Pending'].map((f) {
+              children: ['All', 'Invoiced', 'Loading', 'Delivered', 'Cancelled', 'Pending'].map((f) {
                 final sel = _historyFilter == f;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -2240,18 +2341,14 @@ class _LoadingSheetState extends State<_LoadingSheet> {
 
   Future<void> _submit() async {
     final dn = _dnCtrl.text.trim();
-    final inv = _invCtrl.text.trim();
+    final inv = _invCtrl.text.trim(); // optional
     if (dn.isEmpty) {
       showSnack(context, 'Please enter the Delivery Note Number', error: true);
       return;
     }
-    if (inv.isEmpty) {
-      showSnack(context, 'Please enter the Invoice Number', error: true);
-      return;
-    }
     setState(() => _loading = true);
     try {
-      await ApiService().markLoading(widget.orderId, dn, inv);
+      await ApiService().markLoading(widget.orderId, dn, inv.isEmpty ? null : inv);
       if (mounted) {
         Navigator.pop(context);
         showSnack(context, 'Order assigned to you — Loading confirmed ✓');
@@ -2347,7 +2444,8 @@ class _LoadingSheetState extends State<_LoadingSheet> {
             TextField(
               controller: _invCtrl,
               decoration: const InputDecoration(
-                labelText: 'Invoice Number *',
+                labelText: 'Invoice Number (optional)',
+                hintText: 'Leave blank if not yet available',
                 prefixIcon: Icon(Icons.receipt_long_outlined),
                 border: OutlineInputBorder(),
               ),
