@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'main.dart';
 import 'customer_excel_viewer.dart';
 
@@ -55,6 +57,10 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
   final _locationCtrl = TextEditingController();
   final List<OrderLineItem> _items = [];
   bool _loading = false;
+
+  // ── Attachments ──────────────────────────────────────────
+  /// Each entry: {'name': String, 'bytes': Uint8List, 'mime': String}
+  final List<Map<String, dynamic>> _attachments = [];
 
   @override
   void initState() {
@@ -122,6 +128,129 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
     }
   }
 
+  /// Pick images from camera / gallery or PDF files and add to attachment list.
+  Future<void> _pickAttachments(String source) async {
+    if (_attachments.length >= 5) {
+      showSnack(context, 'Maximum 5 attachments allowed', error: true);
+      return;
+    }
+    try {
+      if (source == 'camera') {
+        final picker = ImagePicker();
+        final xFile = await picker.pickImage(
+          source: ImageSource.camera,
+          imageQuality: 85,
+          maxWidth: 1600,
+        );
+        if (xFile == null || !mounted) return;
+        final bytes = await xFile.readAsBytes();
+        setState(() {
+          _attachments.add({
+            'name': xFile.name,
+            'bytes': bytes,
+            'mime': 'image/jpeg',
+          });
+        });
+      } else if (source == 'gallery') {
+        final picker = ImagePicker();
+        final remaining = 5 - _attachments.length;
+        final files = await picker.pickMultiImage(imageQuality: 85, maxWidth: 1600);
+        if (!mounted) return;
+        final toAdd = files.take(remaining).toList();
+        for (final f in toAdd) {
+          final bytes = await f.readAsBytes();
+          final mime = f.name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+          if (mounted) {
+            setState(() => _attachments.add({'name': f.name, 'bytes': bytes, 'mime': mime}));
+          }
+        }
+        if (files.length > remaining) {
+          if (mounted) showSnack(context, 'Only ${toAdd.length} file(s) added (max 5 total)', error: true);
+        }
+      } else if (source == 'pdf') {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf'],
+          allowMultiple: true,
+          withData: true,
+        );
+        if (result == null || !mounted) return;
+        final remaining = 5 - _attachments.length;
+        final toAdd = result.files.take(remaining).toList();
+        for (final f in toAdd) {
+          if (f.bytes != null) {
+            setState(() => _attachments.add({
+              'name': f.name,
+              'bytes': f.bytes!,
+              'mime': 'application/pdf',
+            }));
+          }
+        }
+        if (result.files.length > remaining) {
+          if (mounted) showSnack(context, 'Only ${toAdd.length} file(s) added (max 5 total)', error: true);
+        }
+      }
+    } catch (e) {
+      if (mounted) showSnack(context, 'Could not pick file: $e', error: true);
+    }
+  }
+
+  void _removeAttachment(int index) {
+    setState(() => _attachments.removeAt(index));
+  }
+
+  void _showAttachmentPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('Add Attachment',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            ),
+            _attachSourceTile(Icons.camera_alt_outlined, 'Take Photo', 'camera'),
+            _attachSourceTile(Icons.photo_library_outlined, 'Choose from Gallery', 'gallery'),
+            _attachSourceTile(Icons.picture_as_pdf_outlined, 'Pick PDF File', 'pdf'),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ListTile _attachSourceTile(IconData icon, String label, String source) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A56DB).withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: const Color(0xFF1A56DB), size: 22),
+      ),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+      onTap: () {
+        Navigator.pop(context);
+        _pickAttachments(source);
+      },
+    );
+  }
+
   Future<void> _confirmAndSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -153,6 +282,8 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
             _confirmRow('Customer', _customerNameCtrl.text.trim()),
             _confirmRow('Location', _locationCtrl.text.trim()),
             _confirmRow('Items', '${_items.length} line item(s)'),
+            if (_attachments.isNotEmpty)
+              _confirmRow('Attachments', '${_attachments.length} file(s)'),
             const Divider(height: 16),
             ..._items.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
@@ -192,11 +323,26 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
       'items': _items.map((i) => i.toJson()).toList(),
     };
     try {
+      Map<String, dynamic> result;
       if (isEdit) {
-        await ApiService().editOrder(widget.existingOrder!['id'], payload);
+        result = await ApiService().editOrder(widget.existingOrder!['id'], payload);
       } else {
-        await ApiService().createOrder(payload);
+        result = await ApiService().createOrder(payload);
       }
+
+      // Upload attachments if any (only on create, or if new ones were added on edit)
+      if (_attachments.isNotEmpty && result['id'] != null) {
+        final orderId = result['id'] as String;
+        try {
+          await ApiService().uploadOrderAttachments(orderId, _attachments);
+        } catch (e) {
+          // Non-fatal: order was created, just warn about attachment upload
+          if (mounted) {
+            showSnack(context, 'Order saved, but attachments failed to upload: $e', error: true);
+          }
+        }
+      }
+
       if (mounted) {
         showSnack(context, isEdit ? 'Order updated ✓' : 'Order created successfully ✓');
         widget.onOrderCreated();
@@ -305,6 +451,98 @@ class _CreateOrderPageState extends State<CreateOrderPage> {
                   ),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Location required' : null,
                 ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // ── Attachments Card ─────────────────────────────
+            _sectionCard(
+              title: 'Attachments',
+              icon: Icons.attach_file_rounded,
+              color: const Color(0xFF7E3AF2),
+              children: [
+                // Add button row
+                OutlinedButton.icon(
+                  onPressed: _attachments.length < 5 ? _showAttachmentPicker : null,
+                  icon: const Icon(Icons.add_circle_outline, size: 16, color: Color(0xFF7E3AF2)),
+                  label: Text(
+                    _attachments.isEmpty
+                        ? 'Add Photo or PDF'
+                        : 'Add More (${_attachments.length}/5)',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF7E3AF2),
+                        fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF7E3AF2)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    minimumSize: const Size(double.infinity, 44),
+                  ),
+                ),
+                if (_attachments.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _attachments.asMap().entries.map((e) {
+                      final idx = e.key;
+                      final att = e.value;
+                      final name = att['name'] as String;
+                      final mime = att['mime'] as String;
+                      final isPdf = mime == 'application/pdf';
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7E3AF2).withOpacity(0.07),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: const Color(0xFF7E3AF2).withOpacity(0.25)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isPdf
+                                  ? Icons.picture_as_pdf_rounded
+                                  : Icons.image_outlined,
+                              size: 15,
+                              color: const Color(0xFF7E3AF2),
+                            ),
+                            const SizedBox(width: 5),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 160),
+                              child: Text(
+                                name.length > 22
+                                    ? '${name.substring(0, 19)}…'
+                                    : name,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF4C1D95)),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => _removeAttachment(idx),
+                              child: const Icon(Icons.close,
+                                  size: 14, color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Optional — attach photos or PDFs (max 5, 10 MB each)',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),

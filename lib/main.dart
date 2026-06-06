@@ -537,6 +537,34 @@ class ApiService {
     return _handle(res);
   }
 
+  /// Upload attachment files for an order.
+  /// [attachments] is a list of {'name': String, 'bytes': Uint8List, 'mime': String}
+  Future<Map<String, dynamic>> uploadOrderAttachments(
+      String orderId, List<Map<String, dynamic>> attachments) async {
+    final uri = Uri.parse('$kBaseUrl/orders/$orderId/attachments');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers.addAll({
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      });
+    for (final att in attachments) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'files',
+        att['bytes'] as List<int>,
+        filename: att['name'] as String,
+        contentType: MediaType.parse(att['mime'] as String),
+      ));
+    }
+    try {
+      final streamed = await request.send().timeout(const Duration(seconds: 60));
+      final res = await http.Response.fromStream(streamed);
+      return _handle(res);
+    } on SocketException {
+      throw NetworkException();
+    } on TimeoutException {
+      throw NetworkException(timeout: true);
+    }
+  }
+
   Future<List<dynamic>> getMyOrders() async {
     final res = await _safeGet(Uri.parse('$kBaseUrl/orders/my'));
     if (res.statusCode == 200) return jsonDecode(res.body) as List;
@@ -566,7 +594,7 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> markInvoiced(
-      String orderId, String invoiceNumber) async {
+      String orderId, String? invoiceNumber) async {
     final res = await _safePatch(
       Uri.parse('$kBaseUrl/orders/$orderId/invoice'),
       body: jsonEncode({'invoice_number': invoiceNumber}),

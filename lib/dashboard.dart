@@ -1049,20 +1049,23 @@ class _InvoicingDashboardState extends State<InvoicingDashboard>
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Enter Invoice Number'),
+        title: const Text('Mark as Invoiced'),
         content: TextField(
           controller: ctrl,
-          decoration: const InputDecoration(labelText: 'Invoice #', prefixIcon: Icon(Icons.tag)),
+          decoration: const InputDecoration(
+            labelText: 'Invoice # (optional)',
+            hintText: 'Leave blank to skip',
+            prefixIcon: Icon(Icons.tag),
+          ),
           autofocus: true,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              if (ctrl.text.trim().isEmpty) return;
               Navigator.pop(context);
               try {
-                await ApiService().markInvoiced(orderId, ctrl.text.trim());
+                await ApiService().markInvoiced(orderId, ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
                 if (mounted) showSnack(context, 'Marked as Invoiced ✓');
                 _load();
                 if (_tabs.index == 1) _loadHistory(silent: true);
